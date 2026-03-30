@@ -9,7 +9,7 @@
  */
 
 import org.galahad.Config
-import groovy.json.JsonSlurper
+
 import groovy.json.JsonOutput
 
 def task(String prompt, String workDir = '/root/work') {
@@ -70,7 +70,7 @@ queue_len = r.llen('codex:task:queue')
 print(json.dumps({'state': state, 'heartbeat': heartbeat, 'queue': queue_len}))
 "
 """.trim())
-    return new JsonSlurper().parseText(raw)
+    return new groovy.json.JsonSlurperClassic().parseText(raw)
 }
 
 def waitForCompletion(int pollSeconds = 30, int timeoutMin = 60) {

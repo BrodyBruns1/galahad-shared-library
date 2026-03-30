@@ -7,7 +7,7 @@
  */
 
 import org.galahad.Config
-import groovy.json.JsonSlurper
+
 import groovy.json.JsonOutput
 
 def search(String query, int numResults = 5) {
@@ -18,7 +18,7 @@ def search(String query, int numResults = 5) {
             httpMode: 'GET',
             timeout: 20
         )
-        def json = new JsonSlurper().parseText(resp.content)
+        def json = new groovy.json.JsonSlurperClassic().parseText(resp.content)
         return json.results?.take(numResults)?.collect { r -> [
             title:   r.title,
             url:     r.url,

@@ -14,7 +14,7 @@
 
 import org.galahad.Config
 import groovy.json.JsonOutput
-import groovy.json.JsonSlurper
+
 
 def call(String prompt, String complexity = 'fast') {
     switch (complexity) {
@@ -41,7 +41,7 @@ def ollama(String prompt, String model = null) {
             validResponseCodes: '200',
             timeout:          60
         )
-        def json = new JsonSlurper().parseText(resp.content)
+        def json = new groovy.json.JsonSlurperClassic().parseText(resp.content)
         return json.response?.trim()
     } catch (e) {
         echo "Ollama error: ${e.message}"
@@ -65,7 +65,7 @@ def lmstudio(String prompt, int maxTokens = 2048) {
             validResponseCodes: '200',
             timeout:          120
         )
-        def json = new JsonSlurper().parseText(resp.content)
+        def json = new groovy.json.JsonSlurperClassic().parseText(resp.content)
         return json.choices[0].message.content?.trim()
     } catch (e) {
         echo "LM Studio error (falling back to Ollama): ${e.message}"

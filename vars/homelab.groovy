@@ -9,7 +9,7 @@
  */
 
 import org.galahad.Config
-import groovy.json.JsonSlurper
+
 import groovy.json.JsonOutput
 
 // ── SSH ──────────────────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ def container(String name, String action) {
             validResponseCodes: '200',
             timeout: 15
         )
-        def containers = new JsonSlurper().parseText(listResp.content)
+        def containers = new groovy.json.JsonSlurperClassic().parseText(listResp.content)
         def target = containers.find { c ->
             c.Names.any { it.replaceAll('^/', '') == name }
         }
@@ -112,7 +112,7 @@ def vmList() {
             validResponseCodes: '200',
             timeout: 15
         )
-        return new JsonSlurper().parseText(resp.content).data
+        return new groovy.json.JsonSlurperClassic().parseText(resp.content).data
     }
 }
 
@@ -128,5 +128,5 @@ def health() {
     )
     // raw may contain ssh banner lines — find the JSON line
     def jsonLine = raw.split('\n').find { it.trim().startsWith('{') }
-    return new JsonSlurper().parseText(jsonLine ?: '{"total":0,"running":0,"down":0,"down_names":[]}')
+    return new groovy.json.JsonSlurperClassic().parseText(jsonLine ?: '{"total":0,"running":0,"down":0,"down_names":[]}')
 }

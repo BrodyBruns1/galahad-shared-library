@@ -62,7 +62,7 @@ def dashboard(Map payload) {
     }
 }
 
-def galahad(String text, double strength = 1.5, String intent = 'general') {
+def galahad(String text, def strength = 1.5, String intent = 'general') {
     dashboard([
         type:     'ai_response',
         text:     text,

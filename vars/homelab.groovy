@@ -119,11 +119,14 @@ def vmList() {
 // ── Health summary ───────────────────────────────────────────────────────────
 
 def health() {
-    def raw = sshVM105("""
-docker ps -a --format '{"name":"{{.Names}}","state":"{{.State}}","health":"{{if .Health}}{{.Health}}{{else}}none{{end}}"}' | \
-python3 -c "import sys,json; rows=[json.loads(l) for l in sys.stdin if l.strip()]; \
-down=[r for r in rows if r['state']!='running']; \
-print(json.dumps({'total':len(rows),'running':len(rows)-len(down),'down':len(down),'down_names':[r['name'] for r in down]}))"
-""".trim())
-    return new JsonSlurper().parseText(raw)
+    def raw = sshVM105(
+        'docker ps -a --format \'{{.Names}}|{{.State}}\' | ' +
+        'python3 -c "import sys,json; rows=[l.strip().split(\'|\') for l in sys.stdin if \'|\' in l]; ' +
+        'down=[r[0] for r in rows if len(r)>1 and r[1]!=\'running\']; ' +
+        'running=[r[0] for r in rows if len(r)>1 and r[1]==\'running\']; ' +
+        'print(json.dumps({\'total\':len(rows),\'running\':len(running),\'down\':len(down),\'down_names\':down}))"'
+    )
+    // raw may contain ssh banner lines — find the JSON line
+    def jsonLine = raw.split('\n').find { it.trim().startsWith('{') }
+    return new JsonSlurper().parseText(jsonLine ?: '{"total":0,"running":0,"down":0,"down_names":[]}')
 }

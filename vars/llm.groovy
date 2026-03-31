@@ -46,7 +46,7 @@ def ollama(String prompt, String model = null) {
 
 def lmstudio(String prompt, int maxTokens = 2048) {
     def body = JsonOutput.toJson([
-        model:       'local-model',
+        model:       Config.LMSTUDIO_MODEL,
         messages:    [[role: 'user', content: prompt]],
         temperature: 0.3,
         max_tokens:  maxTokens,

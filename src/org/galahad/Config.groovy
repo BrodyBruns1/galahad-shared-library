@@ -2,7 +2,7 @@ package org.galahad
 
 class Config implements Serializable {
     // LLM endpoints
-    static final String OLLAMA_URL      = 'http://10.201.52.200:11434'
+    static final String OLLAMA_URL      = 'http://100.111.121.128:11434'
     static final String LMSTUDIO_URL    = 'http://100.71.100.103:1234'
     static final String LMSTUDIO_MODEL  = 'mistralai/ministral-3-14b-reasoning'
     static final String OLLAMA_MODEL    = 'qwen3.5:9b'

@@ -1,20 +1,14 @@
 /**
  * llm — Galahad LLM routing
  *
- * Routes prompts to the right model based on complexity:
- *   'fast'   → Ollama qwen2.5:7b  (< 2s, classification, summaries)
- *   'medium' → LM Studio          (reasoning, reports, code explanation)
+ * All endpoints use OpenAI-compatible /v1/chat/completions:
+ *   'fast'   → Ollama qwen3.5:9b  (classification, summaries, Q&A)
+ *   'medium' → LM Studio          (reasoning, reports, pipeline generation)
  *   'heavy'  → Codex via queue    (async, multi-file projects, deep research)
- *
- * Usage:
- *   def answer = llm.call('What containers are down?', 'fast')
- *   def report = llm.call('Write a summary of...', 'medium')
- *   def taskId = llm.call('Refactor the dashboard JS', 'heavy')
  */
 
 import org.galahad.Config
 import groovy.json.JsonOutput
-
 
 def call(String prompt, String complexity = 'fast') {
     switch (complexity) {
@@ -28,21 +22,22 @@ def call(String prompt, String complexity = 'fast') {
 def ollama(String prompt, String model = null) {
     model = model ?: Config.OLLAMA_MODEL
     def body = JsonOutput.toJson([
-        model:  model,
-        prompt: prompt,
-        stream: false
+        model:       model,
+        messages:    [[role: 'user', content: prompt]],
+        temperature: 0.3,
+        stream:      false
     ])
     try {
         def resp = httpRequest(
-            url:              "${Config.OLLAMA_URL}/api/generate",
-            httpMode:         'POST',
-            contentType:      'APPLICATION_JSON',
-            requestBody:      body,
+            url:                "${Config.OLLAMA_URL}/v1/chat/completions",
+            httpMode:           'POST',
+            contentType:        'APPLICATION_JSON',
+            requestBody:        body,
             validResponseCodes: '200',
-            timeout:          60
+            timeout:            60
         )
         def json = new groovy.json.JsonSlurperClassic().parseText(resp.content)
-        return json.response?.trim()
+        return json.choices[0].message.content?.trim()
     } catch (e) {
         echo "Ollama error: ${e.message}"
         return null
@@ -54,16 +49,17 @@ def lmstudio(String prompt, int maxTokens = 2048) {
         model:       'local-model',
         messages:    [[role: 'user', content: prompt]],
         temperature: 0.3,
-        max_tokens:  maxTokens
+        max_tokens:  maxTokens,
+        stream:      false
     ])
     try {
         def resp = httpRequest(
-            url:              "${Config.LMSTUDIO_URL}/v1/chat/completions",
-            httpMode:         'POST',
-            contentType:      'APPLICATION_JSON',
-            requestBody:      body,
+            url:                "${Config.LMSTUDIO_URL}/v1/chat/completions",
+            httpMode:           'POST',
+            contentType:        'APPLICATION_JSON',
+            requestBody:        body,
             validResponseCodes: '200',
-            timeout:          120
+            timeout:            120
         )
         def json = new groovy.json.JsonSlurperClassic().parseText(resp.content)
         return json.choices[0].message.content?.trim()
@@ -97,13 +93,10 @@ def codexQueue(String prompt, String workDir = '/root/work') {
 }
 
 def classify(String text, List<String> intents) {
-    def intentList = intents.join(', ')
-    def prompt = """Classify this text into exactly one of these intents: ${intentList}
-
-Text: "${text}"
-
-Respond with only the intent label, nothing else."""
-    return ollama(prompt)?.toLowerCase()?.trim()
+    return ollama(
+        "Classify this text into exactly one of these intents: ${intents.join(', ')}\n\n" +
+        "Text: \"${text}\"\n\nRespond with only the intent label, nothing else."
+    )?.toLowerCase()?.trim()
 }
 
 def summarize(String text, String context = '') {
@@ -111,4 +104,18 @@ def summarize(String text, String context = '') {
         ? "Context: ${context}\n\nSummarize this in 1-2 concise sentences:\n${text}"
         : "Summarize this in 1-2 concise sentences:\n${text}"
     return ollama(prompt)
+}
+
+def narrate(String action, String result) {
+    return ollama(
+        "You are Galahad, a homelab AI assistant. Summarize this completed action in one plain sentence " +
+        "suitable for a voice response. Action: \"${action}\". Result: \"${result}\". Be direct and confident."
+    )
+}
+
+def explainError(String action, String error) {
+    return ollama(
+        "You are Galahad, a homelab AI assistant. Explain this error in one plain sentence a non-developer " +
+        "can understand. Action attempted: \"${action}\". Error: \"${error.take(500)}\". Be concise."
+    )
 }

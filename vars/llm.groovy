@@ -1,8 +1,8 @@
 /**
  * llm — Galahad LLM routing
  *
- *   'fast'   → Ollama /api/generate (qwen3.5:9b)
- *   'medium' → LM Studio /v1/chat/completions (ministral-3-14b-reasoning, falls back to Ollama)
+ *   'fast'   → Ollama llama3.1 via /v1/chat/completions
+ *   'medium' → LM Studio ministral-3-14b-reasoning via /v1/chat/completions
  *   'heavy'  → Codex via valkey-bridge queue
  */
 
@@ -20,25 +20,37 @@ def call(String prompt, String complexity = 'fast') {
 
 def ollama(String prompt, String model = null) {
     model = model ?: Config.OLLAMA_MODEL
+    def ts = System.currentTimeMillis()
+    def bodyFile = "/tmp/ollama-req-${ts}.json"
+    def respFile = "/tmp/ollama-resp-${ts}.json"
     def body = JsonOutput.toJson([
-        model:  model,
-        prompt: prompt,
-        stream: false
+        model:    model,
+        messages: [[role: 'user', content: prompt]],
+        stream:   false
     ])
     try {
-        def resp = httpRequest(
-            url:                "${Config.OLLAMA_URL}/api/generate",
-            httpMode:           'POST',
-            contentType:        'APPLICATION_JSON',
-            requestBody:        body,
-            validResponseCodes: '200',
-            timeout:            60
-        )
-        def json = new groovy.json.JsonSlurperClassic().parseText(resp.content)
-        return json.response?.trim()
+        writeFile file: bodyFile, text: body
+        def rc = sh(
+            script: "curl -sf -X POST '${Config.OLLAMA_URL}/v1/chat/completions' " +
+                    "-H 'Content-Type: application/json' " +
+                    "-H 'Authorization: Bearer ollama' " +
+                    "--data-binary @${bodyFile} " +
+                    "-o ${respFile} -w '%{http_code}' --max-time 60",
+            returnStdout: true
+        ).trim()
+        if (rc != '200') {
+            echo "Ollama returned HTTP ${rc}"
+            return null
+        }
+        def raw = readFile(file: respFile)
+        def json = new groovy.json.JsonSlurperClassic().parseText(raw)
+        def msg = (json['choices'] as List)[0]['message'] as Map
+        return msg['content']?.toString()?.trim()
     } catch (e) {
         echo "Ollama error: ${e.message}"
         return null
+    } finally {
+        sh "rm -f ${bodyFile} ${respFile} 2>/dev/null || true"
     }
 }
 
@@ -83,7 +95,7 @@ def lmstudio(String prompt, int maxTokens = 2048) {
 def codexQueue(String prompt, String workDir = '/root/work') {
     def body = JsonOutput.toJson([
         prompt:   prompt,
-        model:    Config.CODEX_MODEL,
+        model:    'gpt-4o',
         work_dir: workDir,
         source:   'jenkins'
     ])
@@ -130,4 +142,3 @@ def explainError(String action, String error) {
         "can understand. Action attempted: \"${action}\". Error: \"${error.take(500)}\". Be concise."
     )
 }
-

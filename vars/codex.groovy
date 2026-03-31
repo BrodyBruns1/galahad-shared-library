@@ -15,7 +15,7 @@ import groovy.json.JsonOutput
 def task(String prompt, String workDir = '/root/work') {
     def body = JsonOutput.toJson([
         prompt:   prompt,
-        model:    'gpt-4o',
+        model:    Config.CODEX_MODEL,
         work_dir: workDir,
         source:   'jenkins'
     ])
@@ -61,16 +61,52 @@ def resume(String message = '') {
 
 def status() {
     def raw = homelab.sshProxmox("""
-python3 -c "
-import redis, json, os
-r = redis.Redis(host='10.201.52.171', port=6379, decode_responses=True)
+VALKEY_PASS=\$(cat /root/.claude/secrets/valkey_password) python3 - <<'PY'
+import json
+import os
+import redis
+
+r = redis.Redis(
+    host='10.201.52.171',
+    port=6379,
+    password=os.environ['VALKEY_PASS'],
+    decode_responses=True,
+)
 state = r.hgetall('codex:task:current')
 heartbeat = r.get('codex:heartbeat')
 queue_len = r.llen('codex:task:queue')
 print(json.dumps({'state': state, 'heartbeat': heartbeat, 'queue': queue_len}))
-"
+PY
 """.trim())
-    return new groovy.json.JsonSlurperClassic().parseText(raw)
+    def jsonLine = raw.split('\n').find { it.trim().startsWith('{') }
+    return new groovy.json.JsonSlurperClassic().parseText(jsonLine ?: '{"state":{},"heartbeat":null,"queue":0}')
+}
+
+def history(int limit = 1) {
+    def safeLimit = Math.max(1, limit)
+    def raw = homelab.sshProxmox("""
+VALKEY_PASS=\$(cat /root/.claude/secrets/valkey_password) python3 - <<'PY'
+import json
+import os
+import redis
+
+r = redis.Redis(
+    host='10.201.52.171',
+    port=6379,
+    password=os.environ['VALKEY_PASS'],
+    decode_responses=True,
+)
+items = []
+for item in r.lrange('codex:task:history', 0, ${safeLimit - 1}):
+    try:
+        items.append(json.loads(item))
+    except json.JSONDecodeError:
+        items.append({'raw': item})
+print(json.dumps(items))
+PY
+""".trim())
+    def jsonLine = raw.split('\n').find { it.trim().startsWith('[') }
+    return new groovy.json.JsonSlurperClassic().parseText(jsonLine ?: '[]')
 }
 
 def waitForCompletion(int pollSeconds = 30, int timeoutMin = 60) {

@@ -60,7 +60,9 @@ def lmstudio(String prompt, int maxTokens = 2048) {
             timeout:            120
         )
         def json = new groovy.json.JsonSlurperClassic().parseText(resp.content)
-        return json.choices[0].message.content?.trim()
+        def msg = json.choices[0].message
+        def content = msg.content?.trim()
+        return content ?: msg.reasoning_content?.trim()
     } catch (e) {
         echo "LM Studio error (falling back to Ollama): ${e.message}"
         return ollama(prompt)

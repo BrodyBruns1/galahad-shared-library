@@ -1,10 +1,9 @@
 /**
  * llm — Galahad LLM routing
  *
- * All endpoints use OpenAI-compatible /v1/chat/completions:
- *   'fast'   → Ollama qwen3.5:9b  (classification, summaries, Q&A)
- *   'medium' → LM Studio          (reasoning, reports, pipeline generation)
- *   'heavy'  → Codex via queue    (async, multi-file projects, deep research)
+ *   'fast'   → Ollama /api/generate (qwen3.5:9b)
+ *   'medium' → LM Studio /v1/chat/completions (ministral-3-14b-reasoning, falls back to Ollama)
+ *   'heavy'  → Codex via valkey-bridge queue
  */
 
 import org.galahad.Config
@@ -22,14 +21,13 @@ def call(String prompt, String complexity = 'fast') {
 def ollama(String prompt, String model = null) {
     model = model ?: Config.OLLAMA_MODEL
     def body = JsonOutput.toJson([
-        model:       model,
-        messages:    [[role: 'user', content: prompt]],
-        temperature: 0.3,
-        stream:      false
+        model:  model,
+        prompt: prompt,
+        stream: false
     ])
     try {
         def resp = httpRequest(
-            url:                "${Config.OLLAMA_URL}/v1/chat/completions",
+            url:                "${Config.OLLAMA_URL}/api/generate",
             httpMode:           'POST',
             contentType:        'APPLICATION_JSON',
             requestBody:        body,
@@ -37,7 +35,7 @@ def ollama(String prompt, String model = null) {
             timeout:            60
         )
         def json = new groovy.json.JsonSlurperClassic().parseText(resp.content)
-        return json.choices[0].message.content?.trim()
+        return json.response?.trim()
     } catch (e) {
         echo "Ollama error: ${e.message}"
         return null

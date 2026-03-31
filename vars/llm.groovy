@@ -43,6 +43,9 @@ def ollama(String prompt, String model = null) {
 }
 
 def lmstudio(String prompt, int maxTokens = 2048) {
+    def ts = System.currentTimeMillis()
+    def bodyFile = "/tmp/lms-req-${ts}.json"
+    def respFile = "/tmp/lms-resp-${ts}.json"
     def body = JsonOutput.toJson([
         model:       Config.LMSTUDIO_MODEL,
         messages:    [[role: 'user', content: prompt]],
@@ -51,26 +54,29 @@ def lmstudio(String prompt, int maxTokens = 2048) {
         stream:      false
     ])
     try {
-        def resp = httpRequest(
-            url:                "${Config.LMSTUDIO_URL}/v1/chat/completions",
-            httpMode:           'POST',
-            contentType:        'APPLICATION_JSON',
-            requestBody:        body,
-            validResponseCodes: '200',
-            timeout:            300
-        )
-        def json = new groovy.json.JsonSlurperClassic().parseText(resp.content)
-        def rawContent = resp.content
-        echo "LM Studio raw response length: ${rawContent?.length()}"
-        def choices = json["choices"] as List
-        def msg = choices[0]["message"] as Map
-        def content = msg["content"]?.toString()?.trim()
-        def reasoning = msg["reasoning_content"]?.toString()?.trim()
-        echo "LM Studio content empty: ${!content}, reasoning empty: ${!reasoning}"
-        return content ?: reasoning
+        writeFile file: bodyFile, text: body
+        def rc = sh(
+            script: "curl -sf -X POST '${Config.LMSTUDIO_URL}/v1/chat/completions' " +
+                    "-H 'Content-Type: application/json' " +
+                    "--data-binary @${bodyFile} " +
+                    "-o ${respFile} -w '%{http_code}' --max-time 300",
+            returnStdout: true
+        ).trim()
+        if (rc != '200') {
+            echo "LM Studio returned HTTP ${rc}, falling back to Ollama"
+            return ollama(prompt)
+        }
+        def raw = readFile(file: respFile)
+        echo "LM Studio response length: ${raw.length()}"
+        def json = new groovy.json.JsonSlurperClassic().parseText(raw)
+        def msg = (json['choices'] as List)[0]['message'] as Map
+        def content = msg['content']?.toString()?.trim()
+        return content ?: msg['reasoning_content']?.toString()?.trim()
     } catch (e) {
         echo "LM Studio error (falling back to Ollama): ${e.message}"
         return ollama(prompt)
+    } finally {
+        sh "rm -f ${bodyFile} ${respFile} 2>/dev/null || true"
     }
 }
 
@@ -124,3 +130,4 @@ def explainError(String action, String error) {
         "can understand. Action attempted: \"${action}\". Error: \"${error.take(500)}\". Be concise."
     )
 }
+

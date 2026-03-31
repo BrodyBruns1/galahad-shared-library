@@ -4,7 +4,8 @@ class Config implements Serializable {
     // LLM endpoints
     static final String OLLAMA_URL      = 'http://10.201.52.200:11434'
     static final String LMSTUDIO_URL    = 'http://100.71.100.103:1234'
-    static final String OLLAMA_MODEL    = 'qwen2.5:7b'
+    static final String OLLAMA_MODEL    = 'qwen3.5:9b'
+    static final String CODEX_MODEL     = 'gpt-5.4'
 
     // Homelab hosts
     static final String PROXMOX_HOST    = '10.201.52.200'

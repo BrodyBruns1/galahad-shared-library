@@ -2,7 +2,7 @@
  * llm — Galahad LLM routing
  *
  * Routes prompts to the right model based on complexity:
- *   'fast'   → Ollama qwen2.5:7b  (< 2s, classification, summaries)
+ *   'fast'   → Ollama qwen3.5:9b  (< 2s, classification, summaries)
  *   'medium' → LM Studio          (reasoning, reports, code explanation)
  *   'heavy'  → Codex via queue    (async, multi-file projects, deep research)
  *
@@ -76,7 +76,7 @@ def lmstudio(String prompt, int maxTokens = 2048) {
 def codexQueue(String prompt, String workDir = '/root/work') {
     def body = JsonOutput.toJson([
         prompt:   prompt,
-        model:    'gpt-4o',
+        model:    Config.CODEX_MODEL,
         work_dir: workDir,
         source:   'jenkins'
     ])
